@@ -30,6 +30,15 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 let GW = 0, GH = 0; // 游戏逻辑尺寸（CSS 像素），全局共用
 
+// ─── 背景音乐 ─────────────────────────────────────────────
+const BGM = new Audio('asset/BGM.mp3');
+BGM.loop   = true;
+BGM.volume = 0.25; // 默认小音量
+
+function bgmPlay() {
+  if (BGM.paused) BGM.play().catch(() => {});
+}
+
 // ─── 图片预加载 ───────────────────────────────────────────
 const IMGS = {};
 (function loadImages() {
@@ -825,6 +834,7 @@ function onDown(x, y) {
     const btnH = (btn && btn.naturalWidth > 0) ? btnW * (btn.naturalHeight / btn.naturalWidth) : 56;
     if (x >= btnX && x <= btnX + btnW && y >= btnY - btnH / 2 && y <= btnY + btnH / 2) {
       S.mode = 'rules';
+      bgmPlay(); // 首次用户交互后启动背景音乐
     }
   } else if (S.mode === 'rules') {
     // 点击"立即开吃"按钮区域（与 drawRules 保持一致）
