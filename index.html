@@ -765,12 +765,17 @@ function drawEnd() {
   ctx.font = 'bold 36px sans-serif';
   if (p.score === 50) {
     // 二选一奖品：分三行显示
-    ctx.fillText('🥚 可生食鸡蛋', W / 2, H * 0.40);
-    ctx.fillText('🧃 娃哈哈AD钙奶', W / 2, H * 0.49);
+    ctx.fillText('🥚 可生食鸡蛋', W / 2, H * 0.38);
     ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(255,255,255,0.75)';
-    ctx.font = '18px sans-serif';
-    ctx.fillText('（奖品二选一）', W / 2, H * 0.56);
+    ctx.fillStyle = 'rgba(255,255,255,0.60)';
+    ctx.font = '22px sans-serif';
+    ctx.fillText('或', W / 2, H * 0.45);
+    ctx.fillStyle = p.color;
+    ctx.font = 'bold 36px sans-serif';
+    ctx.fillText('🧃 娃哈哈AD钙奶', W / 2, H * 0.52);
+    ctx.fillStyle = 'rgba(255,255,255,0.90)';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillText('（奖品二选一）', W / 2, H * 0.59);
   } else {
     ctx.fillText(p.name, W / 2, H * 0.42);
     ctx.shadowBlur = 0;
@@ -779,11 +784,11 @@ function drawEnd() {
   // ③ 得分
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
   ctx.font = '22px sans-serif';
-  const scoreY = p.score === 50 ? H * 0.62 : H * 0.51;
+  const scoreY = p.score === 50 ? H * 0.65 : H * 0.51;
   ctx.fillText(`最终得分：${S.score} 分`, W / 2, scoreY);
 
   // ④ 黄色领取指引框
-  const gx = W * 0.08, gw = W * 0.84, gy = p.score === 50 ? H * 0.70 : H * 0.63;
+  const gx = W * 0.08, gw = W * 0.84, gy = p.score === 50 ? H * 0.73 : H * 0.63;
   ctx.fillStyle = 'rgba(255,200,60,0.95)';
   roundRect(gx, gy, gw, 60, 14); ctx.fill();
   ctx.fillStyle = '#3D1500';
