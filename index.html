@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>野人厨房 狂吃牛丼饭</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      background: #1a0800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+      font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    }
+    canvas { display: block; touch-action: none; }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+// ─── 画布初始化 ───────────────────────────────────────────
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// ─── 图片预加载 ───────────────────────────────────────────
+const IMGS = {};
+(function loadImages() {
+  const srcs = {
+    diaolong: 'asset/diaolong.png',
+    feiniu:   'asset/feiniu.png',
+    jirou:    'asset/jirou.png',
+    cover:    'asset/beijing.jpg',
+    startbtn: 'asset/startbtn.png',
+    renwu:    'asset/renwu.png',
+    gamebg:   'asset/youxibeijing.png',
+    winbg:    'asset/zhongjiangye.png',
+    logo:     'asset/logo.png',
+  };
+  const keys = Object.keys(srcs);
+  let loaded = 0;
+  for (const [k, s] of Object.entries(srcs)) {
+    const img = new Image();
+    img.onload = () => {
+      loaded++;
+      if (loaded === keys.length) preWarm(); // 全部加载完后预热
+    };
+    img.src = s;
+    IMGS[k] = img;
+  }
+})();
+
+// ─── 预热：游戏开始前提前构建缓存并上传 GPU 纹理 ──────────
+function preWarm() {
+  // 1. 提前构建模糊背景缓存（避免游戏第一帧卡顿）
+  buildBgCache(canvas.width, canvas.height);
+
+  // 2. 将所有食材图片各绘制一次到离屏 canvas，触发 GPU 纹理上传
+  const warm = document.createElement('canvas');
+  warm.width = 68; warm.height = 68;
+  const wctx = warm.getContext('2d');
+  ['diaolong', 'feiniu', 'jirou', 'renwu', 'logo'].forEach(k => {
+    const img = IMGS[k];
+    if (img && img.naturalWidth > 0) wctx.drawImage(img, 0, 0, 68, 68);
+  });
+  // warm canvas 用完即弃，GC 自动回收
+}
+
+// ─── 离屏背景缓存（避免每帧执行 blur filter）─────────────
+let bgCache = null;
+let bgCacheW = 0, bgCacheH = 0;
+
+function buildBgCache(W, H) {
+  const bg = IMGS.gamebg;
+  if (!bg || !bg.complete || !bg.naturalWidth) return;
+  if (bgCache && bgCacheW === W && bgCacheH === H) return; // 尺寸未变则跳过
+
+  const off = document.createElement('canvas');
+  off.width = W; off.height = H;
+  const octx = off.getContext('2d');
+  octx.filter = 'blur(6px) brightness(0.55)';
+  const scale = Math.max(W / bg.naturalWidth, H / bg.naturalHeight);
+  const dw = bg.naturalWidth * scale;
+  const dh = bg.naturalHeight * scale;
+  octx.drawImage(bg, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  octx.filter = 'none';
+  // 底部暗角
+  const vignette = octx.createLinearGradient(0, H * 0.6, 0, H);
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, 'rgba(0,0,0,0.45)');
+  octx.fillStyle = vignette;
+  octx.fillRect(0, H * 0.6, W, H * 0.4);
+
+  bgCache = off;
+  bgCacheW = W; bgCacheH = H;
+}
+
+function resize() {
+  canvas.width  = Math.min(420, window.innerWidth);
+  canvas.height = window.innerHeight;
+  bgCache = null; // 尺寸变化时清除缓存，触发重建
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ─── 配置 ─────────────────────────────────────────────────
+const CFG = {
+  duration: 30,      // 游戏时长（秒）
+  prizes: [
+    { score: 500, emoji: '🥩', name: '免费肥牛丼饭一份', color: '#FF4444' },
+    { score: 300, emoji: '💰', name: '立减3元券',        color: '#FF8800' },
+    { score: 150, emoji: '🥚', name: '可生吃鸡蛋一枚',   color: '#FFD700' },
+    { score:   0, emoji: '🧃', name: '娃哈哈AD钙奶',     color: '#44CC44' },
+  ],
+  // 掉落食材定义：img=图片key / e=emoji / 分值 / 类型 / 权重
+  foods: [
+    { img:'diaolong', label:'吊龙丼饭', v: 15, t:'food', w:30 },
+    { img:'feiniu',   label:'肥牛丼饭', v: 10, t:'food', w:40 },
+    { img:'jirou',    label:'鸡腿丼饭', v:  5, t:'food', w:30 },
+    { e:'💣', v:-30, t:'bomb', w:15 },
+  ],
+};
+
+// ─── 游戏状态 ──────────────────────────────────────────────
+let S = {
+  mode: 'start',   // start | rules | play | end
+  score: 0,
+  elapsed: 0,      // ms
+  items: [],
+  floats: [],      // 飘分文字
+  particles: [],
+  spawnTimer: 0,
+  phase: 1,
+  prize: null,
+  bowl: { x: 0, y: 0, w: 100, h: 50 },
+};
+
+function resetGame() {
+  S.score = 0; S.elapsed = 0; S.items = []; S.floats = [];
+  S.particles = []; S.spawnTimer = 0; S.phase = 1; S.prize = null;
+  S.bowl.x = canvas.width / 2;
+  S.bowl.y = canvas.height - 80;
+}
+
+// ─── 工具函数 ─────────────────────────────────────────────
+// 预计算总权重，避免每帧 reduce
+const _foodTotal = CFG.foods.reduce((s, f) => s + f.w, 0);
+
+function weightedPick() {
+  let r = Math.random() * _foodTotal;
+  for (const f of CFG.foods) { r -= f.w; if (r <= 0) return f; }
+  return CFG.foods[0]; // 直接返回引用，spawn 时再按需赋值
+}
+
+function getPrize(score) {
+  return CFG.prizes.find(p => score >= p.score) ?? CFG.prizes.at(-1);
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, r);
+}
+
+// ─── 粒子 & 飘分 ──────────────────────────────────────────
+function burst(x, y, color, n = 8) {
+  for (let i = 0; i < n; i++) {
+    const a = (Math.PI * 2 / n) * i + Math.random() * 0.5;
+    S.particles.push({ x, y,
+      vx: Math.cos(a) * (2 + Math.random() * 3),
+      vy: Math.sin(a) * (2 + Math.random() * 3) - 1,
+      life: 1, color, r: 3 + Math.random() * 3,
+    });
+  }
+}
+
+function floatText(x, y, txt, color) {
+  S.floats.push({ x, y, txt, color, life: 1 });
+}
+
+// ─── 碰撞检测（对准角色嘴巴区域：角色中心偏下30px） ────────
+function hits(item) {
+  const { x, y, w, h } = S.bowl;
+  const mouthY = y + 28; // 嘴巴中心在角色中心下方28px
+  const hs = item.size / 2;
+  return (
+    item.x + hs > x - w / 2 &&
+    item.x - hs < x + w / 2 &&
+    item.y + hs > mouthY - h / 2 &&
+    item.y - hs < mouthY + h / 2
+  );
+}
+
+// ─── 更新逻辑 ─────────────────────────────────────────────
+function update(dt) {
+  if (S.mode !== 'play') return;
+
+  S.elapsed += dt;
+  const sec = S.elapsed / 1000;
+
+  // 阶段划分
+  S.phase = sec < 20 ? 1 : sec < 40 ? 2 : 3;
+
+  // 生成间隔：热身1.4s / 加速1.1s / 冲刺0.85s
+  const interval = [1400, 1100, 850][S.phase - 1];
+  S.spawnTimer += dt;
+  if (S.spawnTimer >= interval) {
+    S.spawnTimer = 0;
+    const f = weightedPick();
+    const size = f.t === 'bomb' ? 46 : 68;
+    const speed = (1.6 + Math.random() * 1.2) * [1, 1.45, 1.95][S.phase - 1];
+    // 直接写属性，避免 spread 运算符每次创建临时对象
+    S.items.push({
+      img: f.img, e: f.e, label: f.label, v: f.v, t: f.t, w: f.w,
+      size, speed,
+      x: size / 2 + Math.random() * (canvas.width - size),
+      y: -size,
+      sway: Math.random() * Math.PI * 2,
+    });
+  }
+
+  // 更新食物
+  S.items = S.items.filter(it => {
+    it.y += it.speed;
+    it.sway += 0.04;
+    it.x += Math.sin(it.sway) * 0.4;
+
+    if (hits(it)) {
+      if (it.t === 'bomb') {
+        S.score = Math.max(0, S.score + it.v);
+        burst(it.x, it.y, '#FF3333', 10);
+        floatText(it.x, it.y - 20, `${it.v}`, '#FF5555');
+      } else {
+        S.score += it.v;
+        burst(it.x, it.y, '#FF9900', 8);
+        floatText(it.x, it.y - 20, `+${it.v}`, '#AAFFAA');
+      }
+      return false;
+    }
+    return it.y < canvas.height + it.size;
+  });
+
+  // 更新粒子
+  S.particles = S.particles.filter(p => {
+    p.x += p.vx; p.y += p.vy; p.vy += 0.18; p.life -= 0.028;
+    return p.life > 0;
+  });
+
+  // 更新飘分
+  S.floats = S.floats.filter(f => {
+    f.y -= 1.8; f.life -= 0.022;
+    return f.life > 0;
+  });
+
+  // 结束判断
+  if (sec >= CFG.duration) {
+    S.prize = getPrize(S.score);
+    S.mode = 'end';
+  }
+}
+
+// ─── 绘制：背景 ───────────────────────────────────────────
+function drawBg() {
+  const W = canvas.width, H = canvas.height;
+
+  buildBgCache(W, H); // 首次或尺寸变化时构建缓存，之后直接复用
+
+  if (bgCache) {
+    ctx.drawImage(bgCache, 0, 0); // 直接贴预渲染结果，无 filter 开销
+  } else {
+    // 图片未加载时兜底渐变
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#1a0800');
+    g.addColorStop(1, '#2e1100');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+// ─── 绘制：角色（替代碗） ──────────────────────────────────
+function drawBowl() {
+  const { x, y } = S.bowl;
+  const size = 130;
+
+  if (IMGS.renwu && IMGS.renwu.complete && IMGS.renwu.naturalWidth > 0) {
+    // 地面阴影
+    ctx.fillStyle = 'rgba(0,0,0,0.20)';
+    ctx.beginPath();
+    ctx.ellipse(x, y + 52, 44, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 绘制角色图片（正面朝上，嘴巴在下方朝上张开接食物）
+    ctx.drawImage(IMGS.renwu, x - size / 2, y - size / 2, size, size);
+  } else {
+    // 兜底：原始碗
+    const w = 100, h = 50;
+    ctx.fillStyle = '#D4A855';
+    ctx.beginPath();
+    ctx.moveTo(x - w / 2, y - h / 4);
+    ctx.quadraticCurveTo(x - w / 2, y + h / 2, x, y + h / 2);
+    ctx.quadraticCurveTo(x + w / 2, y + h / 2, x + w / 2, y - h / 4);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+// ─── 绘制：食物 ───────────────────────────────────────────
+function drawItems() {
+  S.items.forEach(it => {
+    ctx.save();
+    const s = it.size;
+    if (it.img && IMGS[it.img] && IMGS[it.img].complete) {
+      // 圆形裁剪让图片更好看
+      ctx.beginPath();
+      ctx.arc(it.x, it.y, s / 2, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(IMGS[it.img], it.x - s / 2, it.y - s / 2, s, s);
+    } else {
+      if (it.t === 'star') { ctx.shadowBlur = 22; ctx.shadowColor = '#FFD700'; }
+      ctx.font = `${s}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(it.e, it.x, it.y);
+    }
+    ctx.restore();
+  });
+}
+
+// ─── 绘制：粒子 & 飘分 ────────────────────────────────────
+function drawParticles() {
+  S.particles.forEach(p => {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+function drawFloats() {
+  ctx.save();
+  S.floats.forEach(f => {
+    ctx.globalAlpha = f.life;
+    ctx.fillStyle = f.color;
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(f.txt, f.x, f.y);
+  });
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+
+// ─── 绘制：HUD ────────────────────────────────────────────
+function drawHUD() {
+  const timeLeft = Math.max(0, CFG.duration - Math.floor(S.elapsed / 1000));
+  const W = canvas.width;
+
+  // 得分框
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  roundRect(12, 12, 120, 52, 12); ctx.fill();
+  ctx.fillStyle = '#FFA040'; ctx.font = 'bold 12px sans-serif';
+  ctx.fillText('得  分', 24, 32);
+  ctx.fillStyle = '#FFF'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillText(S.score, 24, 56);
+
+  // 倒计时框
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  roundRect(W - 132, 12, 120, 52, 12); ctx.fill();
+  ctx.fillStyle = timeLeft <= 10 ? '#FF5555' : '#FFA040';
+  ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'right';
+  ctx.fillText('剩余时间', W - 24, 32);
+  ctx.fillStyle = '#FFF'; ctx.font = 'bold 24px sans-serif';
+  ctx.fillText(timeLeft + 's', W - 24, 56);
+  ctx.textAlign = 'left';
+
+}
+
+// ─── 封面火光层（烤架位置，screen光晕 + lighter火舌 + 火星）
+function drawCoverFlames(W, H) {
+  const t = Date.now() / 1000;
+
+  // 烤架实际范围：右侧炭烤区 → 向左到"丼"字位置结束
+  const grillY     = H * 0.615;
+  const grillLeft  = W * 0.44;   // 左边界：约"丼"字处
+  const grillRight = W * 0.80;   // 右边界：烤架右侧
+  const grillCx    = (grillLeft + grillRight) / 2;
+
+  // ── 1. 炭火光晕（screen，椭圆自然渐出，无矩形边框）
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  const fg = 0.55 + Math.sin(t * 4.2) * 0.20 + Math.sin(t * 7.8) * 0.12;
+  const grillW = grillRight - grillLeft;
+  // 用压扁椭圆填充渐变，自然边缘无硬切
+  ctx.save();
+  ctx.translate(grillCx, grillY);
+  ctx.scale(1, 0.45);  // 横向扁椭圆，贴合烤架形状
+  const gg = ctx.createRadialGradient(0, 0, 0, 0, 0, grillW * 0.62);
+  gg.addColorStop(0,    `rgba(255,200,60,${fg * 0.90})`);
+  gg.addColorStop(0.28, `rgba(255,90,0,${fg * 0.60})`);
+  gg.addColorStop(0.60, `rgba(180,20,0,${fg * 0.30})`);
+  gg.addColorStop(1,    'rgba(0,0,0,0)');
+  ctx.fillStyle = gg;
+  ctx.beginPath();
+  ctx.arc(0, 0, grillW * 0.62, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.restore();
+
+  // ── 2. 火星粒子（lighter，从烤架各点飞起后消散，无火舌）
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const sparkCount = 42;
+  for (let i = 0; i < sparkCount; i++) {
+    const seed   = i * 73.7;
+    const speed  = 0.18 + (seed % 7) * 0.05;
+    const phase  = ((t * speed + seed * 0.05) % 1);
+    const startX = grillLeft + (seed % (grillRight - grillLeft));
+    // 水平漂移：左右偏摆，越高漂得越远
+    const sway   = Math.sin(t * 2.8 + seed * 0.3) * W * 0.055 * phase;
+    const ex = startX + sway;
+    const ey = grillY - phase * H * 0.36;   // 最高飞到烤架上方36%高度
+    if (phase < 0.08) continue;
+    // 粒子大小：大颗粒 + 小颗粒混合
+    const big  = (i % 5 === 0);
+    const er   = big
+      ? (1 - phase) * 4.5 + 0.8
+      : (1 - phase) * 2.2 + 0.4;
+    const ea   = (1 - phase) * (big ? 0.90 : 0.70) * (0.7 + (seed % 4) * 0.1);
+    const g    = 160 + Math.floor((1 - phase) * 90);
+    ctx.beginPath();
+    ctx.arc(ex, ey, er, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,${g},${big ? 20 : 0},${ea})`;
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ─── 绘制：开始页漫画动画叠加层 ────────────────────────────
+function drawStartOverlays(W, H) {
+  const t = Date.now() / 1000;
+  const cx = W * 0.50, cy = H * 0.42; // 爆炸中心
+
+  // ── 层1：爆炸核心脉冲光晕（screen叠加，橙红脉动）
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  const pulse = 0.10 + Math.sin(t * 3.2) * 0.06 + Math.sin(t * 7.1) * 0.02;
+  const pg = ctx.createRadialGradient(cx, cy, 0, cx, cy, W * 0.55);
+  pg.addColorStop(0,    `rgba(255,200,80,${pulse})`);
+  pg.addColorStop(0.30, `rgba(255,80,0,${pulse * 0.55})`);
+  pg.addColorStop(0.65, `rgba(180,20,0,${pulse * 0.20})`);
+  pg.addColorStop(1,    'rgba(0,0,0,0)');
+  ctx.fillStyle = pg;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+
+  // ── 层2：速度线慢速旋转（screen，低透明度）
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = 0.055 + Math.sin(t * 1.8) * 0.025;
+  const lineCount = 28;
+  const baseAngle = t * 0.06;
+  for (let i = 0; i < lineCount; i++) {
+    const angle = baseAngle + (Math.PI * 2 / lineCount) * i;
+    ctx.strokeStyle = i % 3 === 0 ? '#FFDD44' : '#FF6600';
+    ctx.lineWidth = i % 5 === 0 ? 3 : 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(angle) * W * 0.06, cy + Math.sin(angle) * W * 0.06);
+    ctx.lineTo(cx + Math.cos(angle) * W * 0.85, cy + Math.sin(angle) * W * 0.85);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // ── 层3：偶发屏幕闪光（爆炸感）
+  const flashT = (t * 0.5) % 5; // 每5秒一次
+  if (flashT < 0.15) {
+    const fa = (0.15 - flashT) / 0.15 * 0.18;
+    ctx.fillStyle = `rgba(255,150,0,${fa})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+// ─── 绘制：开始页 ─────────────────────────────────────────
+function drawStart(showBtn = true) {
+  const W = canvas.width, H = canvas.height;
+
+  // ① 封面图铺满背景
+  const cover = IMGS.cover;
+  if (cover && cover.complete && cover.naturalWidth > 0) {
+    // 等比填充（cover-fit）
+    const scale = Math.max(W / cover.naturalWidth, H / cover.naturalHeight);
+    const dw = cover.naturalWidth * scale;
+    const dh = cover.naturalHeight * scale;
+    ctx.drawImage(cover, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  } else {
+    // 图片未加载时兜底
+    drawBg();
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#FF6600'; ctx.font = 'bold 28px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🔥 野人厨房 狂吃牛丼饭', W / 2, H * 0.5);
+    ctx.textAlign = 'left';
+  }
+
+  // ② 动态火焰叠加层
+  drawCoverFlames(W, H);
+
+  // ② 扩展：漫画背景多层动画叠加
+  drawStartOverlays(W, H);
+
+  // ③ 底部渐变遮罩，让按钮区域更清晰
+  const grad = ctx.createLinearGradient(0, H * 0.72, 0, H);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.55)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, H * 0.72, W, H * 0.28);
+
+  // ④ 按钮图（跳动动画，showBtn=false时跳过）
+  if (showBtn !== false) {
+    const btn = IMGS.startbtn;
+    const btnW = W * 0.78;
+    const bounce = Math.sin(Date.now() / 320) * 9;
+    const btnY = H * 0.80;
+    if (btn && btn.complete && btn.naturalWidth > 0) {
+      const btnH = btnW * (btn.naturalHeight / btn.naturalWidth);
+      ctx.save();
+      ctx.globalAlpha = 0.70; // 半透明
+      ctx.drawImage(btn, (W - btnW) / 2, btnY - btnH / 2 + bounce, btnW, btnH);
+      ctx.restore();
+    } else {
+      const bw = 220, bh = 56;
+      const bx = (W - bw) / 2, by = btnY - bh / 2 + bounce;
+      ctx.fillStyle = 'rgba(255,102,0,0.45)';
+      roundRect(bx, by, bw, bh, 28); ctx.fill();
+      ctx.fillStyle = '#FFF'; ctx.font = 'bold 20px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('🔥 立即开吃 赢取奖品', W / 2, by + 36);
+      ctx.textAlign = 'left';
+    }
+  }
+}
+
+// ─── 绘制：规则弹窗 ───────────────────────────────────────
+function drawRules() {
+  // 先渲染开始页作为底层，不显示按钮
+  drawStart(false);
+
+  const W = canvas.width, H = canvas.height;
+
+  // 半透明遮罩
+  ctx.fillStyle = 'rgba(0,0,0,0.72)';
+  ctx.fillRect(0, 0, W, H);
+
+  // 弹窗尺寸（加高以容纳奖品区）
+  const pw = W * 0.90, ph = Math.min(H * 0.78, 520);
+  const px = (W - pw) / 2, py = (H - ph) / 2 - 10;
+
+  // 弹窗背景
+  ctx.fillStyle = '#1e0a00';
+  roundRect(px, py, pw, ph, 20); ctx.fill();
+  ctx.strokeStyle = '#FF6600';
+  ctx.lineWidth = 2;
+  roundRect(px, py, pw, ph, 20); ctx.stroke();
+
+  // 顶部橙色标题条
+  ctx.fillStyle = '#FF6600';
+  roundRect(px, py, pw, 42, [20, 20, 0, 0]); ctx.fill();
+  ctx.fillStyle = '#FFF';
+  ctx.font = 'bold 16px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('📋 游戏规则', W / 2, py + 27);
+
+  // ── 游戏玩法标题 + 说明
+  let curY = py + 62;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#FFA040';
+  ctx.font = 'bold 15px sans-serif';
+  ctx.fillText('游戏玩法', W / 2, curY);
+  curY += 20;
+  ctx.fillStyle = '#FFDDAA';
+  ctx.font = '12px sans-serif';
+  ctx.fillText('左右滑动接住下落食材', W / 2, curY);
+  curY += 18; // 与道具行的间距
+
+  // ── 道具规则条目
+  const rules = [
+    { icon: 'diaolong', text: '吊龙丼饭   +15分' },
+    { icon: 'feiniu',   text: '肥牛丼饭   +10分' },
+    { icon: 'jirou',    text: '鸡腿丼饭   +5分' },
+    { icon: '💣',       text: '接到炸弹   扣30分，小心！' },
+  ];
+
+  const iconSize = 28;
+  const iconCx  = px + 18 + iconSize / 2;
+  const textX   = px + 18 + iconSize + 10;
+  const rowH    = 34;
+
+  ctx.textAlign = 'left';
+  rules.forEach(({ icon, text }, i) => {
+    const ry = curY + i * rowH + rowH / 2;
+    if (i % 2 === 0) {
+      ctx.fillStyle = 'rgba(255,100,0,0.07)';
+      roundRect(px + 10, ry - rowH / 2 + 1, pw - 20, rowH - 2, 5); ctx.fill();
+    }
+    const img = IMGS[icon];
+    if (img && img.complete && img.naturalWidth > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(iconCx, ry, iconSize / 2, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(img, iconCx - iconSize / 2, ry - iconSize / 2, iconSize, iconSize);
+      ctx.restore();
+    } else {
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.beginPath();
+      ctx.arc(iconCx, ry, iconSize / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.font = '20px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#FFF';
+      ctx.fillText(icon, iconCx, ry);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      ctx.restore();
+    }
+    ctx.fillStyle = '#FFDDAA';
+    ctx.font = '13px sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, textX, ry);
+    ctx.textBaseline = 'alphabetic';
+  });
+
+  // ── 奖品区
+  const prizesTop = curY + rules.length * rowH + 12;
+  // 分割线
+  ctx.strokeStyle = 'rgba(255,102,0,0.4)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(px + 16, prizesTop); ctx.lineTo(px + pw - 16, prizesTop);
+  ctx.stroke();
+  // 标题（与"游戏玩法"同字号）
+  ctx.fillStyle = '#FFA040';
+  ctx.font = 'bold 15px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('游戏奖品', W / 2, prizesTop + 22);
+
+  const prizeRowH = rowH; // 与道具行距完全一致
+  CFG.prizes.forEach((p, i) => {
+    const pry = prizesTop + 44 + i * prizeRowH + prizeRowH / 2; // 行中心Y
+    if (i % 2 === 0) {
+      ctx.fillStyle = 'rgba(255,100,0,0.07)';
+      roundRect(px + 10, pry - rowH / 2 + 1, pw - 20, rowH - 2, 5); ctx.fill();
+    }
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    const threshold = i === 0 ? `${p.score}分+`
+      : i === CFG.prizes.length - 1 ? `0-${CFG.prizes[i-1].score - 1}分`
+      : `${p.score}-${CFG.prizes[i-1].score - 1}分`;
+    ctx.fillStyle = p.color;
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(threshold, px + 16, pry);
+    ctx.fillStyle = '#FFF';
+    ctx.font = '12px sans-serif';
+    ctx.fillText(`${p.emoji} ${p.name}`, px + 100, pry);
+    ctx.textBaseline = 'alphabetic';
+  });
+
+  // 立即开吃按钮
+  const bw = 180, bh = 44;
+  const bx = (W - bw) / 2, by = py + ph - 58;
+  ctx.fillStyle = '#FF6600';
+  roundRect(bx, by, bw, bh, 22); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  roundRect(bx, by, bw, bh / 2, [22, 22, 0, 0]); ctx.fill();
+  ctx.fillStyle = '#FFF';
+  ctx.font = 'bold 19px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🔥 立即开吃', W / 2, by + bh / 2);
+  ctx.textBaseline = 'alphabetic';
+
+  ctx.textAlign = 'left';
+}
+
+// ─── 绘制：结算页 ─────────────────────────────────────────
+function drawEnd() {
+  const W = canvas.width, H = canvas.height;
+  const p = S.prize;
+
+  // ① 游戏背景（复用模糊缓存）
+  drawBg();
+  ctx.fillStyle = 'rgba(0,0,0,0.50)';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.textAlign = 'center';
+
+  // ② 恭喜获得 + 奖品名，置于画面中间
+  ctx.fillStyle = '#FFF';
+  ctx.font = 'bold 36px sans-serif';
+  ctx.shadowColor = 'rgba(0,0,0,0.9)';
+  ctx.shadowBlur = 14;
+  ctx.fillText('🎉 恭喜获得！', W / 2, H * 0.38);
+
+  ctx.fillStyle = p.color;
+  ctx.font = 'bold 30px sans-serif';
+  ctx.fillText(p.name, W / 2, H * 0.47);
+  ctx.shadowBlur = 0;
+
+  // ③ 得分
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.font = '16px sans-serif';
+  ctx.fillText(`最终得分：${S.score} 分`, W / 2, H * 0.55);
+
+  // ④ 黄色领取指引框
+  const gx = W * 0.08, gw = W * 0.84, gy = H * 0.63;
+  ctx.fillStyle = 'rgba(255,200,60,0.95)';
+  roundRect(gx, gy, gw, 60, 14); ctx.fill();
+  ctx.fillStyle = '#3D1500';
+  ctx.font = 'bold 18px sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🏆 出示该结果页即可领取奖品', W / 2, gy + 30);
+  ctx.textBaseline = 'alphabetic';
+
+  // ⑤ 游戏时间（黄色框下方）
+  const now = new Date();
+  const timeStr = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')}  ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  ctx.fillStyle = 'rgba(255,255,255,0.60)';
+  ctx.font = '13px sans-serif';
+  ctx.fillText(`游戏时间：${timeStr}`, W / 2, gy + 54 + 20);
+
+  // ⑥ logo 底部居中
+  const logo = IMGS.logo;
+  if (logo && logo.complete && logo.naturalWidth > 0) {
+    const logoH = H * 0.09;
+    const logoW = logoH * (logo.naturalWidth / logo.naturalHeight);
+    ctx.drawImage(logo, (W - logoW) / 2, H * 0.88, logoW, logoH);
+  }
+
+  ctx.textAlign = 'left';
+}
+
+// ─── 主循环 ───────────────────────────────────────────────
+let last = 0;
+function loop(ts) {
+  const dt = Math.min(ts - last, 50); last = ts;
+  update(dt);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (S.mode === 'start') {
+    drawStart();
+  } else if (S.mode === 'rules') {
+    drawRules();
+  } else if (S.mode === 'play') {
+    drawBg();
+    drawItems();
+    drawBowl();
+    drawParticles();
+    drawFloats();
+    drawHUD();
+  } else {
+    drawEnd();
+  }
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(ts => { last = ts; requestAnimationFrame(loop); });
+
+// ─── 输入控制 ─────────────────────────────────────────────
+let dragging = false;
+
+function clampBowl(x) {
+  S.bowl.x = Math.max(S.bowl.w / 2, Math.min(canvas.width - S.bowl.w / 2, x));
+}
+
+function onDown(x, y) {
+  dragging = true;
+  if (S.mode === 'start') {
+    S.mode = 'rules';
+  } else if (S.mode === 'rules') {
+    // 点击"立即开吃"按钮区域（与 drawRules 保持一致）
+    const W = canvas.width, H = canvas.height;
+    const ph = Math.min(H * 0.78, 520), py = (H - ph) / 2 - 10;
+    const bh = 44, by = py + ph - 58;
+    if (y > by && y < by + bh) { resetGame(); S.mode = 'play'; }
+  } else if (S.mode === 'end') {
+    // 结算页无按钮，点击无响应
+  } else {
+    clampBowl(x);
+  }
+}
+
+function onMove(x) {
+  if (dragging && S.mode === 'play') clampBowl(x);
+}
+
+// 触屏
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  onDown(e.touches[0].clientX, e.touches[0].clientY);
+}, { passive: false });
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  onMove(e.touches[0].clientX);
+}, { passive: false });
+canvas.addEventListener('touchend', () => { dragging = false; });
+
+// 鼠标（PC调试）
+canvas.addEventListener('mousedown', e => onDown(e.clientX, e.clientY));
+canvas.addEventListener('mousemove', e => onMove(e.clientX));
+canvas.addEventListener('mouseup', () => { dragging = false; });
+</script>
+</body>
+</html>
