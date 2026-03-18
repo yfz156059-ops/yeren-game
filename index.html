@@ -814,7 +814,16 @@ function clampBowl(x) {
 function onDown(x, y) {
   dragging = true;
   if (S.mode === 'start') {
-    S.mode = 'rules';
+    // 只响应按钮区域点击（与 drawStart 保持一致）
+    const W = canvas.width, H = canvas.height;
+    const btnW = W * 0.78;
+    const btnX = (W - btnW) / 2;
+    const btnY = H * 0.80;
+    const btn = IMGS.startbtn;
+    const btnH = (btn && btn.naturalWidth > 0) ? btnW * (btn.naturalHeight / btn.naturalWidth) : 56;
+    if (x >= btnX && x <= btnX + btnW && y >= btnY - btnH / 2 && y <= btnY + btnH / 2) {
+      S.mode = 'rules';
+    }
   } else if (S.mode === 'rules') {
     // 点击"立即开吃"按钮区域（与 drawRules 保持一致）
     const W = canvas.width, H = canvas.height;
