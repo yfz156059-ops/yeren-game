@@ -93,36 +93,30 @@ function buildBgCache(W, H) {
   // iOS Safari 不支持 ctx.filter，用缩放降级模拟模糊
   const supportsFilter = typeof octx.filter === 'string';
   if (supportsFilter) {
-    octx.filter = 'blur(6px) brightness(0.55)';
+    octx.filter = 'blur(3px) brightness(0.75)';
     octx.drawImage(bg, ox, oy, dw, dh);
     octx.filter = 'none';
   } else {
-    // 降级：先缩小到 1/8，再放大回来，产生模糊效果（多次叠加增强）
-    const factor = 8;
+    // 降级：缩小到 1/4 再放大，轻度模糊保留纹理
+    const factor = 4;
     const small = document.createElement('canvas');
     small.width = Math.ceil(W / factor); small.height = Math.ceil(H / factor);
     const sctx = small.getContext('2d');
     sctx.imageSmoothingEnabled = true;
     sctx.drawImage(bg, ox / factor, oy / factor, dw / factor, dh / factor);
-    // 二次降采样进一步模糊
-    const small2 = document.createElement('canvas');
-    small2.width = Math.ceil(W / factor / 2); small2.height = Math.ceil(H / factor / 2);
-    const s2ctx = small2.getContext('2d');
-    s2ctx.imageSmoothingEnabled = true;
-    s2ctx.drawImage(small, 0, 0, small2.width, small2.height);
     // 放大回原尺寸
     octx.imageSmoothingEnabled = true;
     octx.imageSmoothingQuality = 'high';
-    octx.drawImage(small2, 0, 0, W, H);
-    // 压暗
-    octx.fillStyle = 'rgba(0,0,0,0.45)';
+    octx.drawImage(small, 0, 0, W, H);
+    // 轻度压暗
+    octx.fillStyle = 'rgba(0,0,0,0.30)';
     octx.fillRect(0, 0, W, H);
   }
 
   // 底部暗角
   const vignette = octx.createLinearGradient(0, H * 0.6, 0, H);
   vignette.addColorStop(0, 'rgba(0,0,0,0)');
-  vignette.addColorStop(1, 'rgba(0,0,0,0.45)');
+  vignette.addColorStop(1, 'rgba(0,0,0,0.28)');
   octx.fillStyle = vignette;
   octx.fillRect(0, H * 0.6, W, H * 0.4);
 
