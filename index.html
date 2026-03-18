@@ -39,6 +39,15 @@ function bgmPlay() {
   if (BGM.paused) BGM.play().catch(() => {});
 }
 
+// 第一次触摸屏幕即启动音乐（绕过移动端自动播放限制）
+function onFirstTouch() {
+  bgmPlay();
+  document.removeEventListener('touchstart', onFirstTouch);
+  document.removeEventListener('mousedown', onFirstTouch);
+}
+document.addEventListener('touchstart', onFirstTouch, { once: true });
+document.addEventListener('mousedown', onFirstTouch, { once: true });
+
 // ─── 图片预加载 ───────────────────────────────────────────
 const IMGS = {};
 (function loadImages() {
