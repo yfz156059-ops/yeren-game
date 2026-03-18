@@ -559,7 +559,7 @@ function drawStart(showBtn = true) {
     const btn = IMGS.startbtn;
     const btnW = W * 0.78;
     const bounce = Math.sin(Date.now() / 320) * 9;
-    const btnY = H * 0.80;
+    const btnY = H * 0.73;
     if (btn && btn.complete && btn.naturalWidth > 0) {
       const btnH = btnW * (btn.naturalHeight / btn.naturalWidth);
       ctx.save();
@@ -735,22 +735,22 @@ function drawEnd() {
 
   ctx.textAlign = 'center';
 
-  // ② 恭喜获得 + 奖品名，置于画面中间
+  // ② 恭喜获得 + 奖品名，置于画面中间偏上
   ctx.fillStyle = '#FFF';
-  ctx.font = 'bold 36px sans-serif';
+  ctx.font = 'bold 44px sans-serif';
   ctx.shadowColor = 'rgba(0,0,0,0.9)';
   ctx.shadowBlur = 14;
-  ctx.fillText('🎉 恭喜获得！', W / 2, H * 0.38);
+  ctx.fillText('🎉 恭喜获得！', W / 2, H * 0.32);
 
   ctx.fillStyle = p.color;
-  ctx.font = 'bold 30px sans-serif';
-  ctx.fillText(p.name, W / 2, H * 0.47);
+  ctx.font = 'bold 36px sans-serif';
+  ctx.fillText(p.name, W / 2, H * 0.42);
   ctx.shadowBlur = 0;
 
   // ③ 得分
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.font = '16px sans-serif';
-  ctx.fillText(`最终得分：${S.score} 分`, W / 2, H * 0.55);
+  ctx.font = '22px sans-serif';
+  ctx.fillText(`最终得分：${S.score} 分`, W / 2, H * 0.51);
 
   // ④ 黄色领取指引框
   const gx = W * 0.08, gw = W * 0.84, gy = H * 0.63;
@@ -820,7 +820,7 @@ function onDown(x, y) {
     const W = GW, H = GH;
     const btnW = W * 0.78;
     const btnX = (W - btnW) / 2;
-    const btnY = H * 0.80;
+    const btnY = H * 0.73;
     const btn = IMGS.startbtn;
     const btnH = (btn && btn.naturalWidth > 0) ? btnW * (btn.naturalHeight / btn.naturalWidth) : 56;
     if (x >= btnX && x <= btnX + btnW && y >= btnY - btnH / 2 && y <= btnY + btnH / 2) {
