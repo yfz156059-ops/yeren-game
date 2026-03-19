@@ -80,6 +80,7 @@ document.addEventListener('mousedown', onFirstTouch, { once: true });
 
 // ─── 图片预加载 ───────────────────────────────────────────
 const IMGS = {};
+let _loadedCount = 0, _totalCount = 0;
 (function loadImages() {
   const srcs = {
     diaolong: 'asset/diaolong.png',
@@ -93,10 +94,11 @@ const IMGS = {};
     logo:     'asset/logo.png',
   };
   const keys = Object.keys(srcs);
+  _totalCount = keys.length;
   let loaded = 0;
   for (const [k, s] of Object.entries(srcs)) {
     const img = new Image();
-    const done = () => { loaded++; if (loaded === keys.length) preWarm(); };
+    const done = () => { loaded++; _loadedCount = loaded; if (loaded === keys.length) preWarm(); };
     img.onload = done;
     img.onerror = done; // 加载失败也继续，显示fallback
     img.src = s;
@@ -512,11 +514,21 @@ function drawLoading() {
   const t = Date.now() / 1000;
   ctx.fillStyle = '#1a0800';
   ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center';
   ctx.fillStyle = '#FF6600';
   ctx.font = 'bold 18px sans-serif';
-  ctx.textAlign = 'center';
   const dots = '.'.repeat(Math.floor(t * 2) % 4);
-  ctx.fillText('🔥 野人厨房 加载中' + dots, W / 2, H / 2);
+  ctx.fillText('🔥 加载中' + dots + ' (' + _loadedCount + '/' + _totalCount + ')', W / 2, H * 0.45);
+  // 每张图片状态
+  ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#FFF';
+  const keys = ['diaolong','feiniu','jirou','gamebg','cover'];
+  keys.forEach((k, i) => {
+    const img = IMGS[k];
+    const s = img ? (img.complete ? (img.naturalWidth > 0 ? 'OK:'+img.naturalWidth : 'w=0') : '...') : '?';
+    ctx.fillStyle = (s.startsWith('OK')) ? '#44FF44' : '#FF4444';
+    ctx.fillText(k + ': ' + s, W / 2, H * 0.55 + i * 22);
+  });
   ctx.textAlign = 'left';
 }
 
