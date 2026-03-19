@@ -30,16 +30,46 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 let GW = 0, GH = 0; // 游戏逻辑尺寸（CSS 像素），全局共用
 
-// ─── 背景音乐 ─────────────────────────────────────────────
-const BGM = new Audio('asset/BGM.mp3');
-BGM.loop   = true;
-BGM.volume = 0.25; // 默认小音量
+// ─── 背景音乐（AudioContext，iOS/HTTP 全兼容）────────────────
+let _bgmCtx = null;
+let _bgmData = null;
+let _bgmTriggered = false;
 
-function bgmPlay() {
-  if (BGM.paused) BGM.play().catch(() => {});
+// 提前 fetch MP3 数据（绕过 iOS 对 HTML Audio preload 的限制）
+fetch('asset/BGM.mp3')
+  .then(r => r.arrayBuffer())
+  .then(ab => {
+    _bgmData = ab;
+    // 若用户已触发 bgmPlay() 但数据当时还没就绪，现在补播
+    if (_bgmTriggered && _bgmCtx) _bgmDecode();
+  })
+  .catch(() => {});
+
+function _bgmDecode() {
+  if (!_bgmCtx || !_bgmData) return;
+  _bgmCtx.decodeAudioData(_bgmData.slice(0), buf => {
+    const src = _bgmCtx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const gain = _bgmCtx.createGain();
+    gain.gain.value = 0.45;
+    src.connect(gain);
+    gain.connect(_bgmCtx.destination);
+    src.start(0);
+  }, () => {/* decode error */});
 }
 
-// 第一次触摸屏幕即启动音乐（绕过移动端自动播放限制）
+function bgmPlay() {
+  if (_bgmCtx) return; // 已启动，防重复
+  try {
+    _bgmCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_bgmCtx.state === 'suspended') _bgmCtx.resume();
+  } catch(e) { return; }
+  _bgmTriggered = true;
+  _bgmDecode(); // 数据已就绪则立即播，否则 fetch 完成后触发
+}
+
+// 第一次触摸屏幕即启动（在用户手势上下文里创建 AudioContext）
 function onFirstTouch() {
   bgmPlay();
   document.removeEventListener('touchstart', onFirstTouch);
