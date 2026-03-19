@@ -10,12 +10,12 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Copy files via SCP (password auth)
+      - name: Copy files via SCP (key auth)
         uses: appleboy/scp-action@v0.1.7
         with:
           host: 43.128.8.73
           username: root
-          password: ${{ secrets.SERVER_PASSWORD }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
           port: 22
           source: "index.html,asset/"
           target: /www/wwwroot/43.128.8.73/
