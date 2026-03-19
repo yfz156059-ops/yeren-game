@@ -102,80 +102,16 @@ const IMGS = {};
     img.src = s;
     IMGS[k] = img;
   }
-  // 超时保护：10秒后无论如何进入游戏
-  setTimeout(() => { if (S.mode === 'loading') preWarm(); }, 10000);
+  // 超时保护：30秒后无论如何进入游戏
+  setTimeout(() => { if (S.mode === 'loading') preWarm(); }, 30000);
 })();
 
 // ─── 预热：游戏开始前提前构建缓存并上传 GPU 纹理 ──────────
 function preWarm() {
   if (S.mode !== 'loading') return; // 防止超时与正常加载重复触发
   S.mode = 'start';
-  // 1. 提前构建模糊背景缓存（避免游戏第一帧卡顿）
-  buildBgCache(GW, GH);
-
-  // 2. 将所有食材图片各绘制一次到离屏 canvas，触发 GPU 纹理上传
-  const warm = document.createElement('canvas');
-  warm.width = 68; warm.height = 68;
-  const wctx = warm.getContext('2d');
-  ['diaolong', 'feiniu', 'jirou', 'renwu', 'logo'].forEach(k => {
-    const img = IMGS[k];
-    if (img && img.naturalWidth > 0) wctx.drawImage(img, 0, 0, 68, 68);
-  });
-  // warm canvas 用完即弃，GC 自动回收
 }
 
-// ─── 离屏背景缓存（避免每帧执行 blur filter）─────────────
-let bgCache = null;
-let bgCacheW = 0, bgCacheH = 0;
-
-function buildBgCache(W, H) {
-  const bg = IMGS.gamebg;
-  if (!bg || !bg.complete || !bg.naturalWidth) return;
-  if (bgCache && bgCacheW === W && bgCacheH === H) return;
-
-  // 以物理像素构建缓存，保证高清屏清晰度
-  const dpr = window.devicePixelRatio || 1;
-  const PW = Math.round(W * dpr), PH = Math.round(H * dpr);
-
-  const scale = Math.max(PW / bg.naturalWidth, PH / bg.naturalHeight);
-  const dw = bg.naturalWidth * scale;
-  const dh = bg.naturalHeight * scale;
-  const ox = (PW - dw) / 2, oy = (PH - dh) / 2;
-
-  const off = document.createElement('canvas');
-  off.width = PW; off.height = PH;
-  const octx = off.getContext('2d');
-
-  // iOS Safari 不支持 ctx.filter，用缩放降级模拟模糊
-  const supportsFilter = typeof octx.filter === 'string';
-  if (supportsFilter) {
-    octx.filter = 'blur(2px) brightness(0.82)';
-    octx.drawImage(bg, ox, oy, dw, dh);
-    octx.filter = 'none';
-  } else {
-    // 降级：缩小到 1/2 再放大，轻度模糊保留细节
-    const small = document.createElement('canvas');
-    small.width = Math.ceil(PW / 2); small.height = Math.ceil(PH / 2);
-    const sctx = small.getContext('2d');
-    sctx.imageSmoothingEnabled = true;
-    sctx.drawImage(bg, ox / 2, oy / 2, dw / 2, dh / 2);
-    octx.imageSmoothingEnabled = true;
-    octx.imageSmoothingQuality = 'high';
-    octx.drawImage(small, 0, 0, PW, PH);
-    octx.fillStyle = 'rgba(0,0,0,0.20)';
-    octx.fillRect(0, 0, PW, PH);
-  }
-
-  // 底部暗角
-  const vignette = octx.createLinearGradient(0, PH * 0.6, 0, PH);
-  vignette.addColorStop(0, 'rgba(0,0,0,0)');
-  vignette.addColorStop(1, 'rgba(0,0,0,0.20)');
-  octx.fillStyle = vignette;
-  octx.fillRect(0, PH * 0.6, PW, PH * 0.4);
-
-  bgCache = off;
-  bgCacheW = W; bgCacheH = H;
-}
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -186,7 +122,6 @@ function resize() {
   canvas.style.width  = GW + 'px';
   canvas.style.height = GH + 'px';
   ctx.scale(dpr, dpr);
-  bgCache = null;
 }
 resize();
 window.addEventListener('resize', resize);
@@ -350,13 +285,14 @@ function update(dt) {
 // ─── 绘制：背景 ───────────────────────────────────────────
 function drawBg() {
   const W = GW, H = GH;
-
-  buildBgCache(W, H); // 首次或尺寸变化时构建缓存，之后直接复用
-
-  if (bgCache) {
-    ctx.drawImage(bgCache, 0, 0, GW, GH); // 物理分辨率缓存映射到 CSS 像素坐标
+  const bg = IMGS.gamebg;
+  if (bg && bg.complete && bg.naturalWidth > 0) {
+    const scale = Math.max(W / bg.naturalWidth, H / bg.naturalHeight);
+    const dw = bg.naturalWidth * scale, dh = bg.naturalHeight * scale;
+    ctx.drawImage(bg, (W - dw) / 2, (H - dh) / 2, dw, dh);
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.fillRect(0, 0, W, H);
   } else {
-    // 图片未加载时兜底渐变
     const g = ctx.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, '#1a0800');
     g.addColorStop(1, '#2e1100');
