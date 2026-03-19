@@ -35,15 +35,20 @@ let _bgmCtx = null;
 let _bgmData = null;
 let _bgmTriggered = false;
 
-// 提前 fetch MP3 数据（绕过 iOS 对 HTML Audio preload 的限制）
-fetch('asset/BGM.mp3')
-  .then(r => r.arrayBuffer())
-  .then(ab => {
-    _bgmData = ab;
-    // 若用户已触发 bgmPlay() 但数据当时还没就绪，现在补播
-    if (_bgmTriggered && _bgmCtx) _bgmDecode();
-  })
-  .catch(() => {});
+// 提前 fetch BGM 数据（绕过 iOS 对 HTML Audio preload 的限制）
+// 优先尝试 .m4a（体积小），失败后回退 .mp3
+function _fetchBGM(url) {
+  fetch(url)
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+    .then(ab => {
+      _bgmData = ab;
+      if (_bgmTriggered && _bgmCtx) _bgmDecode();
+    })
+    .catch(() => {
+      if (url.endsWith('.m4a')) _fetchBGM('asset/BGM.mp3'); // 回退
+    });
+}
+_fetchBGM('asset/BGM.m4a');
 
 function _bgmDecode() {
   if (!_bgmCtx || !_bgmData) return;
@@ -82,30 +87,45 @@ document.addEventListener('mousedown', onFirstTouch, { once: true });
 const IMGS = {};
 let _loadedCount = 0, _totalCount = 0;
 (function loadImages() {
-  const srcs = {
+  // 关键图片（必须加载完才进游戏）
+  const critical = {
     diaolong: 'asset/diaolong.png',
     feiniu:   'asset/feiniu.png',
     jirou:    'asset/jirou.png',
+    renwu:    'asset/renwu.png',
+  };
+  // 非关键图片（后台加载，加载失败有fallback，不阻塞进入游戏）
+  const lazy = {
     cover:    'asset/beijing.jpg',
     startbtn: 'asset/startbtn.png',
-    renwu:    'asset/renwu.png',
-    gamebg:   'asset/youxibeijing.png',
-    winbg:    'asset/zhongjiangye.png',
+    gamebg:   'asset/youxibeijing.jpg',
+    winbg:    'asset/zhongjiangye.jpg',
     logo:     'asset/logo.png',
   };
-  const keys = Object.keys(srcs);
-  _totalCount = keys.length;
-  let loaded = 0;
-  for (const [k, s] of Object.entries(srcs)) {
+
+  const criticalKeys = Object.keys(critical);
+  _totalCount = criticalKeys.length;
+  let criticalLoaded = 0;
+
+  // 加载关键图片
+  for (const [k, s] of Object.entries(critical)) {
     const img = new Image();
-    const done = () => { loaded++; _loadedCount = loaded; if (loaded === keys.length) preWarm(); };
+    const done = () => { criticalLoaded++; _loadedCount = criticalLoaded; if (criticalLoaded === criticalKeys.length) preWarm(); };
     img.onload = done;
-    img.onerror = done; // 加载失败也继续，显示fallback
+    img.onerror = done;
     img.src = s;
     IMGS[k] = img;
   }
-  // 超时保护：30秒后无论如何进入游戏
-  setTimeout(() => { if (S.mode === 'loading') preWarm(); }, 30000);
+
+  // 非关键图片后台静默加载，不计入进度
+  for (const [k, s] of Object.entries(lazy)) {
+    const img = new Image();
+    img.src = s;
+    IMGS[k] = img;
+  }
+
+  // 超时保护：6秒后无论如何进入游戏
+  setTimeout(() => { if (S.mode === 'loading') preWarm(); }, 6000);
 })();
 
 // ─── 预热：游戏开始前提前构建缓存并上传 GPU 纹理 ──────────
