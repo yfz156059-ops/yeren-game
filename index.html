@@ -97,7 +97,7 @@ let _loadedCount = 0, _totalCount = 0;
   // 非关键图片（后台加载，加载失败有fallback，不阻塞进入游戏）
   const lazy = {
     cover:    'asset/beijing.jpg',
-    startbtn: 'asset/startbtn.png',
+    startbtn: 'asset/startbtn.jpg',
     gamebg:   'asset/youxibeijing.jpg',
     winbg:    'asset/zhongjiangye.jpg',
     logo:     'asset/logo.png',
@@ -117,9 +117,12 @@ let _loadedCount = 0, _totalCount = 0;
     IMGS[k] = img;
   }
 
-  // 非关键图片后台静默加载，不计入进度
+  // 非关键图片后台静默加载，不计入进度；.jpg 失败自动回退 .png
   for (const [k, s] of Object.entries(lazy)) {
     const img = new Image();
+    img.onerror = () => {
+      if (s.endsWith('.jpg')) { img.onerror = null; img.src = s.replace('.jpg', '.png'); }
+    };
     img.src = s;
     IMGS[k] = img;
   }
@@ -355,7 +358,7 @@ function drawItems() {
   S.items.forEach(it => {
     ctx.save();
     const s = it.size;
-    if (it.img && IMGS[it.img] && IMGS[it.img].complete) {
+    if (it.img && IMGS[it.img] && IMGS[it.img].complete && IMGS[it.img].naturalWidth > 0) {
       // 圆形裁剪让图片更好看
       ctx.beginPath();
       ctx.arc(it.x, it.y, s / 2, 0, Math.PI * 2);
