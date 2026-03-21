@@ -83,42 +83,21 @@ function onFirstTouch() {
 document.addEventListener('touchstart', onFirstTouch, { once: true });
 document.addEventListener('mousedown', onFirstTouch, { once: true });
 
-// ─── 图片预加载 ───────────────────────────────────────────
+// ─── 图片预加载（全部后台加载，不阻塞进入游戏）──────────────
 const IMGS = {};
-let _loadedCount = 0, _totalCount = 0;
 (function loadImages() {
-  // 关键图片（必须加载完才进游戏）
-  const critical = {
+  const all = {
     diaolong: 'asset/diaolong.png',
     feiniu:   'asset/feiniu.png',
     jirou:    'asset/jirou.png',
     renwu:    'asset/renwu.png',
-  };
-  // 非关键图片（后台加载，加载失败有fallback，不阻塞进入游戏）
-  const lazy = {
     cover:    'asset/beijing.jpg',
     startbtn: 'asset/startbtn.jpg',
     gamebg:   'asset/youxibeijing.jpg',
     winbg:    'asset/zhongjiangye.jpg',
     logo:     'asset/logo.png',
   };
-
-  const criticalKeys = Object.keys(critical);
-  _totalCount = criticalKeys.length;
-  let criticalLoaded = 0;
-
-  // 加载关键图片
-  for (const [k, s] of Object.entries(critical)) {
-    const img = new Image();
-    const done = () => { criticalLoaded++; _loadedCount = criticalLoaded; if (criticalLoaded === criticalKeys.length) preWarm(); };
-    img.onload = done;
-    img.onerror = done;
-    img.src = s;
-    IMGS[k] = img;
-  }
-
-  // 非关键图片后台静默加载，不计入进度；.jpg 失败自动回退 .png
-  for (const [k, s] of Object.entries(lazy)) {
+  for (const [k, s] of Object.entries(all)) {
     const img = new Image();
     img.onerror = () => {
       if (s.endsWith('.jpg')) { img.onerror = null; img.src = s.replace('.jpg', '.png'); }
@@ -126,17 +105,7 @@ let _loadedCount = 0, _totalCount = 0;
     img.src = s;
     IMGS[k] = img;
   }
-
-  // 超时保护：6秒后无论如何进入游戏
-  setTimeout(() => { if (S.mode === 'loading') preWarm(); }, 6000);
 })();
-
-// ─── 预热：游戏开始前提前构建缓存并上传 GPU 纹理 ──────────
-function preWarm() {
-  if (S.mode !== 'loading') return; // 防止超时与正常加载重复触发
-  S.mode = 'start';
-}
-
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -172,7 +141,7 @@ const CFG = {
 
 // ─── 游戏状态 ──────────────────────────────────────────────
 let S = {
-  mode: 'loading', // loading | start | rules | play | end
+  mode: 'start', // start | rules | play | end
   score: 0,
   elapsed: 0,      // ms
   items: [],
@@ -531,30 +500,6 @@ function drawStartOverlays(W, H) {
   }
 }
 
-// ─── 绘制：加载页 ─────────────────────────────────────────
-function drawLoading() {
-  const W = GW, H = GH;
-  const t = Date.now() / 1000;
-  ctx.fillStyle = '#1a0800';
-  ctx.fillRect(0, 0, W, H);
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#FF6600';
-  ctx.font = 'bold 18px sans-serif';
-  const dots = '.'.repeat(Math.floor(t * 2) % 4);
-  ctx.fillText('🔥 加载中' + dots + ' (' + _loadedCount + '/' + _totalCount + ')', W / 2, H * 0.45);
-  // 每张图片状态
-  ctx.font = '12px sans-serif';
-  ctx.fillStyle = '#FFF';
-  const keys = ['diaolong','feiniu','jirou','gamebg','cover'];
-  keys.forEach((k, i) => {
-    const img = IMGS[k];
-    const s = img ? (img.complete ? (img.naturalWidth > 0 ? 'OK:'+img.naturalWidth : 'w=0') : '...') : '?';
-    ctx.fillStyle = (s.startsWith('OK')) ? '#44FF44' : '#FF4444';
-    ctx.fillText(k + ': ' + s, W / 2, H * 0.55 + i * 22);
-  });
-  ctx.textAlign = 'left';
-}
-
 // ─── 绘制：开始页 ─────────────────────────────────────────
 function drawStart(showBtn = true) {
   const W = GW, H = GH;
@@ -840,9 +785,7 @@ function loop(ts) {
   update(dt);
   ctx.clearRect(0, 0, GW, GH);
 
-  if (S.mode === 'loading') {
-    drawLoading();
-  } else if (S.mode === 'start') {
+  if (S.mode === 'start') {
     drawStart();
   } else if (S.mode === 'rules') {
     drawRules();
