@@ -30,59 +30,22 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 let GW = 0, GH = 0; // 游戏逻辑尺寸（CSS 像素），全局共用
 
-// ─── 背景音乐（AudioContext，iOS/HTTP 全兼容）────────────────
-let _bgmCtx = null;
-let _bgmData = null;
-let _bgmTriggered = false;
-
-// 提前 fetch BGM 数据（绕过 iOS 对 HTML Audio preload 的限制）
-// 优先尝试 .m4a（体积小），失败后回退 .mp3
-function _fetchBGM(url) {
-  fetch(url)
-    .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
-    .then(ab => {
-      _bgmData = ab;
-      if (_bgmTriggered && _bgmCtx) _bgmDecode();
-    })
-    .catch(() => {
-      if (url.endsWith('.m4a')) _fetchBGM('asset/BGM.mp3'); // 回退
-    });
-}
-_fetchBGM('asset/BGM.m4a');
-
-function _bgmDecode() {
-  if (!_bgmCtx || !_bgmData) return;
-  _bgmCtx.decodeAudioData(_bgmData.slice(0), buf => {
-    const src = _bgmCtx.createBufferSource();
-    src.buffer = buf;
-    src.loop = true;
-    const gain = _bgmCtx.createGain();
-    gain.gain.value = 0.45;
-    src.connect(gain);
-    gain.connect(_bgmCtx.destination);
-    // iOS AudioContext 可能在 decode 后进入 suspended，强制 resume 再播放
-    _bgmCtx.resume().then(() => src.start(0)).catch(() => src.start(0));
-  }, () => {/* decode error */});
-}
+// ─── 背景音乐（HTML Audio，支持流式加载，iOS 第一次触摸解锁）──
+const _bgmAudio = new Audio();
+_bgmAudio.loop = true;
+_bgmAudio.volume = 0.45;
+_bgmAudio.src = 'asset/BGM.m4a';
+_bgmAudio.onerror = () => { _bgmAudio.src = 'asset/BGM.mp3'; }; // m4a失败回退mp3
+let _bgmStarted = false;
 
 function bgmPlay() {
-  if (_bgmCtx) return; // 已启动，防重复
-  try {
-    _bgmCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (_bgmCtx.state === 'suspended') _bgmCtx.resume();
-  } catch(e) { return; }
-  _bgmTriggered = true;
-  _bgmDecode(); // 数据已就绪则立即播，否则 fetch 完成后触发
+  if (_bgmStarted) return;
+  _bgmStarted = true;
+  _bgmAudio.play().catch(() => {}); // 忽略 autoplay policy 报错
 }
-
-// 第一次触摸屏幕即启动（在用户手势上下文里创建 AudioContext）
-function onFirstTouch() {
-  bgmPlay();
-  document.removeEventListener('touchstart', onFirstTouch);
-  document.removeEventListener('mousedown', onFirstTouch);
-}
-document.addEventListener('touchstart', onFirstTouch, { once: true });
-document.addEventListener('mousedown', onFirstTouch, { once: true });
+// 第一次触摸即启动（在用户手势上下文里解锁 Audio）
+document.addEventListener('touchstart', bgmPlay, { once: true });
+document.addEventListener('mousedown', bgmPlay, { once: true });
 
 // ─── 图片预加载（全部后台加载，不阻塞进入游戏）──────────────
 const IMGS = {};
@@ -116,6 +79,7 @@ function resize() {
   canvas.height = Math.round(GH * dpr);
   canvas.style.width  = GW + 'px';
   canvas.style.height = GH + 'px';
+  ctx.setTransform(1, 0, 0, 1, 0, 0); // 重置累积变换，防止多次调用叠加
   ctx.scale(dpr, dpr);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
@@ -539,22 +503,21 @@ function drawStart(showBtn = true) {
   ctx.fillStyle = grad;
   ctx.fillRect(0, H * 0.72, W, H * 0.28);
 
-  // ④ 开始按钮（纯文字，跳动动画，showBtn=false时跳过）
+  // ④ 开始按钮（跳动动画，showBtn=false时跳过）
   if (showBtn !== false) {
-    const bw = W * 0.72, bh = 58;
-    const bounce = Math.sin(Date.now() / 320) * 9;
-    const bx = (W - bw) / 2, by = H * 0.73 - bh / 2 + bounce;
-    // 橙色实底圆角按钮
+    const bw = W * 0.72, bh = 52;
+    const bounce = Math.sin(Date.now() / 320) * 8;
+    const bx = (W - bw) / 2, by = H * 0.78 - bh / 2 + bounce;
     ctx.fillStyle = '#FF6600';
-    roundRect(bx, by, bw, bh, 30); ctx.fill();
-    // 内描边
-    ctx.strokeStyle = 'rgba(255,220,80,0.6)';
-    ctx.lineWidth = 2;
-    roundRect(bx + 3, by + 3, bw - 6, bh - 6, 28); ctx.stroke();
+    roundRect(bx, by, bw, bh, 26); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    roundRect(bx, by, bw, bh / 2, [26, 26, 0, 0]); ctx.fill();
     ctx.fillStyle = '#FFF';
-    ctx.font = 'bold 22px sans-serif';
+    ctx.font = 'bold 20px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('🔥 立即开吃 赢取奖品', W / 2, by + bh * 0.62);
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🔥 立即开吃 赢取奖品', W / 2, by + bh / 2);
+    ctx.textBaseline = 'alphabetic';
     ctx.textAlign = 'left';
   }
 }
@@ -816,9 +779,9 @@ function onDown(x, y) {
   if (S.mode === 'start') {
     // 只响应按钮区域点击（与 drawStart 保持一致）
     const W = GW, H = GH;
-    const btnW = W * 0.72, btnH = 58;
+    const btnW = W * 0.72, btnH = 52;
     const btnX = (W - btnW) / 2;
-    const btnY = H * 0.73;
+    const btnY = H * 0.78;
     if (x >= btnX && x <= btnX + btnW && y >= btnY - btnH / 2 && y <= btnY + btnH / 2) {
       S.mode = 'rules';
       bgmPlay(); // 首次用户交互后启动背景音乐
