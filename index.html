@@ -60,7 +60,8 @@ function _bgmDecode() {
     gain.gain.value = 0.45;
     src.connect(gain);
     gain.connect(_bgmCtx.destination);
-    src.start(0);
+    // iOS AudioContext 可能在 decode 后进入 suspended，强制 resume 再播放
+    _bgmCtx.resume().then(() => src.start(0)).catch(() => src.start(0));
   }, () => {/* decode error */});
 }
 
@@ -116,6 +117,8 @@ function resize() {
   canvas.style.width  = GW + 'px';
   canvas.style.height = GH + 'px';
   ctx.scale(dpr, dpr);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 }
 resize();
 window.addEventListener('resize', resize);
@@ -536,28 +539,23 @@ function drawStart(showBtn = true) {
   ctx.fillStyle = grad;
   ctx.fillRect(0, H * 0.72, W, H * 0.28);
 
-  // ④ 按钮图（跳动动画，showBtn=false时跳过）
+  // ④ 开始按钮（纯文字，跳动动画，showBtn=false时跳过）
   if (showBtn !== false) {
-    const btn = IMGS.startbtn;
-    const btnW = W * 0.78;
+    const bw = W * 0.72, bh = 58;
     const bounce = Math.sin(Date.now() / 320) * 9;
-    const btnY = H * 0.73;
-    if (btn && btn.complete && btn.naturalWidth > 0) {
-      const btnH = btnW * (btn.naturalHeight / btn.naturalWidth);
-      ctx.save();
-      ctx.globalAlpha = 0.70; // 半透明
-      ctx.drawImage(btn, (W - btnW) / 2, btnY - btnH / 2 + bounce, btnW, btnH);
-      ctx.restore();
-    } else {
-      const bw = 220, bh = 56;
-      const bx = (W - bw) / 2, by = btnY - bh / 2 + bounce;
-      ctx.fillStyle = 'rgba(255,102,0,0.45)';
-      roundRect(bx, by, bw, bh, 28); ctx.fill();
-      ctx.fillStyle = '#FFF'; ctx.font = 'bold 20px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('🔥 立即开吃 赢取奖品', W / 2, by + 36);
-      ctx.textAlign = 'left';
-    }
+    const bx = (W - bw) / 2, by = H * 0.73 - bh / 2 + bounce;
+    // 橙色实底圆角按钮
+    ctx.fillStyle = '#FF6600';
+    roundRect(bx, by, bw, bh, 30); ctx.fill();
+    // 内描边
+    ctx.strokeStyle = 'rgba(255,220,80,0.6)';
+    ctx.lineWidth = 2;
+    roundRect(bx + 3, by + 3, bw - 6, bh - 6, 28); ctx.stroke();
+    ctx.fillStyle = '#FFF';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🔥 立即开吃 赢取奖品', W / 2, by + bh * 0.62);
+    ctx.textAlign = 'left';
   }
 }
 
@@ -784,6 +782,8 @@ function loop(ts) {
   const dt = Math.min(ts - last, 50); last = ts;
   update(dt);
   ctx.clearRect(0, 0, GW, GH);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
   if (S.mode === 'start') {
     drawStart();
@@ -816,11 +816,9 @@ function onDown(x, y) {
   if (S.mode === 'start') {
     // 只响应按钮区域点击（与 drawStart 保持一致）
     const W = GW, H = GH;
-    const btnW = W * 0.78;
+    const btnW = W * 0.72, btnH = 58;
     const btnX = (W - btnW) / 2;
     const btnY = H * 0.73;
-    const btn = IMGS.startbtn;
-    const btnH = (btn && btn.naturalWidth > 0) ? btnW * (btn.naturalHeight / btn.naturalWidth) : 56;
     if (x >= btnX && x <= btnX + btnW && y >= btnY - btnH / 2 && y <= btnY + btnH / 2) {
       S.mode = 'rules';
       bgmPlay(); // 首次用户交互后启动背景音乐
