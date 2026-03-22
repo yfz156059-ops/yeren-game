@@ -25,6 +25,31 @@
 <body>
 <canvas id="c"></canvas>
 <script>
+// ─── roundRect 兼容性 polyfill（iOS 15.4 以下不支持原生 roundRect）
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    let tl, tr, br, bl;
+    if (typeof r === 'number') {
+      tl = tr = br = bl = r;
+    } else if (Array.isArray(r)) {
+      [tl = 0, tr = tl, br = tl, bl = tr] = r;
+    } else {
+      tl = tr = br = bl = 0;
+    }
+    this.moveTo(x + tl, y);
+    this.lineTo(x + w - tr, y);
+    this.arcTo(x + w, y,     x + w, y + tr,     tr);
+    this.lineTo(x + w, y + h - br);
+    this.arcTo(x + w, y + h, x + w - br, y + h, br);
+    this.lineTo(x + bl, y + h);
+    this.arcTo(x,     y + h, x, y + h - bl,     bl);
+    this.lineTo(x, y + tl);
+    this.arcTo(x,     y,     x + tl, y,          tl);
+    this.closePath();
+    return this;
+  };
+}
+
 // ─── 画布初始化 ───────────────────────────────────────────
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -56,7 +81,6 @@ const IMGS = {};
     jirou:    'asset/jirou.png',
     renwu:    'asset/renwu.png',
     cover:    'asset/beijing.jpg',
-    startbtn: 'asset/startbtn.jpg',
     gamebg:   'asset/youxibeijing.jpg',
     winbg:    'asset/zhongjiangye.jpg',
     logo:     'asset/logo.png',
@@ -182,8 +206,8 @@ function update(dt) {
   S.elapsed += dt;
   const sec = S.elapsed / 1000;
 
-  // 阶段划分
-  S.phase = sec < 20 ? 1 : sec < 40 ? 2 : 3;
+  // 阶段划分（30秒游戏：0-10s热身 / 10-20s加速 / 20-30s冲刺）
+  S.phase = sec < 10 ? 1 : sec < 20 ? 2 : 3;
 
   // 生成间隔：热身1.4s / 加速1.1s / 冲刺0.85s
   const interval = [1400, 1100, 850][S.phase - 1];
