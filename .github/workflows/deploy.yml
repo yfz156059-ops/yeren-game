@@ -15,7 +15,7 @@ jobs:
         with:
           host: 175.178.49.80
           username: root
-          password: ${{ secrets.SERVER_PASSWORD }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
           port: 22
           source: "index.html,asset/"
           target: /www/wwwroot/175.178.49.80/
@@ -25,7 +25,7 @@ jobs:
         with:
           host: 175.178.49.80
           username: root
-          password: ${{ secrets.SERVER_PASSWORD }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
           port: 22
           script: |
             pgrep nginx > /dev/null || nginx
