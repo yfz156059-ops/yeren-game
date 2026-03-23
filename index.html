@@ -545,7 +545,9 @@ function drawStart(showBtn = true) {
     ctx.translate(cx, cy + bounceY);
     ctx.scale(scaleF, scaleF);
     if (btn && btn.complete && btn.naturalWidth > 0) {
+      ctx.globalAlpha = 0.82;
       ctx.drawImage(btn, 29, 482, 712, 398, -bw / 2, -bh / 2, bw, bh);
+      ctx.globalAlpha = 1;
     } else {
       roundRect(-bw / 2, -bh / 2, bw, bh, 26);
       ctx.fillStyle = '#FF6600'; ctx.fill();
