@@ -10,12 +10,23 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Deploy via SSH (git pull on server)
+      - name: SCP files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: 175.178.49.80
+          username: root
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          source: "index.html,asset/"
+          target: /www/wwwroot/175.178.49.80/
+
+      - name: Ensure nginx is running
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: 43.128.8.73
+          host: 175.178.49.80
           username: root
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
           script: |
-            cd /tmp/yeren-game && git pull origin main && cp index.html /www/wwwroot/43.128.8.73/ && cp -r asset/ /www/wwwroot/43.128.8.73/ && echo "deployed at $(date)"
+            pgrep nginx > /dev/null || nginx
+            echo "deployed at $(date)"
