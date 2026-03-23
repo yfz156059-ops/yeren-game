@@ -527,27 +527,32 @@ function drawStart(showBtn = true) {
   ctx.fillStyle = grad;
   ctx.fillRect(0, H * 0.72, W, H * 0.28);
 
-  // ④ 开始按钮（跳动动画，showBtn=false时跳过）
+  // ④ 开始按钮（跳动+缩放脉冲动画，showBtn=false时跳过）
   if (showBtn !== false) {
     const bw = W * 0.75;
     const bh = bw * 0.56;  // 内容区实际比例 398/712
-    const bounce = Math.sin(Date.now() / 320) * 8;
-    const bx = (W - bw) / 2, by = H * 0.80 - bh / 2 + bounce;
+    const t = Date.now() / 1000;
+    const bounceY = Math.sin(t * Math.PI * 1.8) * 10;
+    const scaleF = 1 + Math.sin(t * Math.PI * 1.8 + Math.PI / 2) * 0.05;
+    const cx = W / 2, cy = H * 0.80;
     const btn = IMGS.startbtn;
+    ctx.save();
+    ctx.translate(cx, cy + bounceY);
+    ctx.scale(scaleF, scaleF);
     if (btn && btn.complete && btn.naturalWidth > 0) {
-      // 裁剪到实际内容区（图片顶部一半为透明）sx=29,sy=482,sw=712,sh=398
-      ctx.drawImage(btn, 29, 482, 712, 398, bx, by, bw, bh);
+      ctx.drawImage(btn, 29, 482, 712, 398, -bw / 2, -bh / 2, bw, bh);
     } else {
-      ctx.fillStyle = '#FF6600';
-      roundRect(bx, by, bw, bh, 26); ctx.fill();
+      roundRect(-bw / 2, -bh / 2, bw, bh, 26);
+      ctx.fillStyle = '#FF6600'; ctx.fill();
       ctx.fillStyle = '#FFF';
       ctx.font = 'bold 20px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('🔥 立即开吃 赢取奖品', W / 2, by + bh / 2);
+      ctx.fillText('🔥 立即开吃 赢取奖品', 0, 0);
       ctx.textBaseline = 'alphabetic';
       ctx.textAlign = 'left';
     }
+    ctx.restore();
   }
 }
 
