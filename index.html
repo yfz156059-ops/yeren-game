@@ -84,6 +84,7 @@ const IMGS = {};
     gamebg:   'asset/youxibeijing.jpg',
     winbg:    'asset/zhongjiangye.jpg',
     logo:     'asset/logo.png',
+    startbtn: 'asset/startbtn.png',
   };
   for (const [k, s] of Object.entries(all)) {
     const img = new Image();
@@ -209,14 +210,14 @@ function update(dt) {
   // 阶段划分（30秒游戏：0-10s热身 / 10-20s加速 / 20-30s冲刺）
   S.phase = sec < 10 ? 1 : sec < 20 ? 2 : 3;
 
-  // 生成间隔：热身1.4s / 加速1.1s / 冲刺0.85s
-  const interval = [1400, 1100, 850][S.phase - 1];
+  // 生成间隔：热身1.0s / 加速0.8s / 冲刺0.6s
+  const interval = [1000, 800, 600][S.phase - 1];
   S.spawnTimer += dt;
   if (S.spawnTimer >= interval) {
     S.spawnTimer = 0;
     const f = weightedPick();
     const size = f.t === 'bomb' ? 46 : 68;
-    const speed = (1.6 + Math.random() * 1.2) * [1, 1.45, 1.95][S.phase - 1];
+    const speed = (3.5 + Math.random() * 1.0) * [1, 1.3, 1.7][S.phase - 1];
     // 直接写属性，避免 spread 运算符每次创建临时对象
     S.items.push({
       img: f.img, e: f.e, label: f.label, v: f.v, t: f.t, w: f.w,
@@ -529,20 +530,24 @@ function drawStart(showBtn = true) {
 
   // ④ 开始按钮（跳动动画，showBtn=false时跳过）
   if (showBtn !== false) {
-    const bw = W * 0.72, bh = 52;
+    const bw = W * 0.75;
+    const bh = bw * 0.36;
     const bounce = Math.sin(Date.now() / 320) * 8;
     const bx = (W - bw) / 2, by = H * 0.78 - bh / 2 + bounce;
-    ctx.fillStyle = '#FF6600';
-    roundRect(bx, by, bw, bh, 26); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.15)';
-    roundRect(bx, by, bw, bh / 2, [26, 26, 0, 0]); ctx.fill();
-    ctx.fillStyle = '#FFF';
-    ctx.font = 'bold 20px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('🔥 立即开吃 赢取奖品', W / 2, by + bh / 2);
-    ctx.textBaseline = 'alphabetic';
-    ctx.textAlign = 'left';
+    const btn = IMGS.startbtn;
+    if (btn && btn.complete && btn.naturalWidth > 0) {
+      ctx.drawImage(btn, bx, by, bw, bh);
+    } else {
+      ctx.fillStyle = '#FF6600';
+      roundRect(bx, by, bw, bh, 26); ctx.fill();
+      ctx.fillStyle = '#FFF';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🔥 立即开吃 赢取奖品', W / 2, by + bh / 2);
+      ctx.textBaseline = 'alphabetic';
+      ctx.textAlign = 'left';
+    }
   }
 }
 
