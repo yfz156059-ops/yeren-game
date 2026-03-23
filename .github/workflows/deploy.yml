@@ -10,23 +10,18 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H 175.178.49.80 >> ~/.ssh/known_hosts
+
       - name: SCP files to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: 175.178.49.80
-          username: root
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: 22
-          source: "index.html,asset/"
-          target: /www/wwwroot/175.178.49.80/
+        run: |
+          scp -i ~/.ssh/deploy_key index.html root@175.178.49.80:/www/wwwroot/175.178.49.80/
+          scp -i ~/.ssh/deploy_key -r asset/ root@175.178.49.80:/www/wwwroot/175.178.49.80/
 
       - name: Ensure nginx is running
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: 175.178.49.80
-          username: root
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: 22
-          script: |
-            pgrep nginx > /dev/null || nginx
-            echo "deployed at $(date)"
+        run: |
+          ssh -i ~/.ssh/deploy_key root@175.178.49.80 "pgrep nginx > /dev/null || nginx && echo 'deployed at $(date)'"
