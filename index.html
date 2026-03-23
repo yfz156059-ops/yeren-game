@@ -531,12 +531,13 @@ function drawStart(showBtn = true) {
   // ④ 开始按钮（跳动动画，showBtn=false时跳过）
   if (showBtn !== false) {
     const bw = W * 0.75;
-    const bh = bw * 0.36;
+    const bh = bw * 0.56;  // 内容区实际比例 398/712
     const bounce = Math.sin(Date.now() / 320) * 8;
-    const bx = (W - bw) / 2, by = H * 0.78 - bh / 2 + bounce;
+    const bx = (W - bw) / 2, by = H * 0.80 - bh / 2 + bounce;
     const btn = IMGS.startbtn;
     if (btn && btn.complete && btn.naturalWidth > 0) {
-      ctx.drawImage(btn, bx, by, bw, bh);
+      // 裁剪到实际内容区（图片顶部一半为透明）sx=29,sy=482,sw=712,sh=398
+      ctx.drawImage(btn, 29, 482, 712, 398, bx, by, bw, bh);
     } else {
       ctx.fillStyle = '#FF6600';
       roundRect(bx, by, bw, bh, 26); ctx.fill();
@@ -770,8 +771,14 @@ function drawEnd() {
 
 // ─── 主循环 ───────────────────────────────────────────────
 let last = 0;
+let _lastDpr = 0;
 function loop(ts) {
   const dt = Math.min(ts - last, 50); last = ts;
+  // 检测 DPR 或窗口变化，自动重新校准（防止模糊）
+  const dpr = window.devicePixelRatio || 1;
+  if (dpr !== _lastDpr || canvas.width !== Math.round(GW * dpr)) {
+    _lastDpr = dpr; resize();
+  }
   update(dt);
   ctx.clearRect(0, 0, GW, GH);
   ctx.imageSmoothingEnabled = true;
