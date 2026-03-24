@@ -357,7 +357,21 @@ function drawItems() {
       ctx.clip();
       ctx.drawImage(IMGS[it.img], it.x - s / 2, it.y - s / 2, s, s);
     } else {
+      if (it.t === 'bomb') {
+        // Android WebView 部分机型 emoji 渲染透明，先画实色背景圆兜底
+        ctx.fillStyle = '#222222';
+        ctx.beginPath();
+        ctx.arc(it.x, it.y, s / 2, 0, Math.PI * 2);
+        ctx.fill();
+        // 高光点
+        ctx.fillStyle = '#444444';
+        ctx.beginPath();
+        ctx.arc(it.x - s * 0.12, it.y - s * 0.15, s * 0.15, 0, Math.PI * 2);
+        ctx.fill();
+      }
       if (it.t === 'star') { ctx.shadowBlur = 22; ctx.shadowColor = '#FFD700'; }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#000000';
       ctx.font = `${s}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -754,7 +768,7 @@ function drawEnd() {
 
   ctx.fillStyle = p.color;
   ctx.font = 'bold 36px sans-serif';
-  if (p.score === 50) {
+  if (p.score === 30) {
     // 二选一奖品：分三行显示
     ctx.fillText('🥚 可生食鸡蛋', W / 2, H * 0.38);
     ctx.shadowBlur = 0;
@@ -775,11 +789,11 @@ function drawEnd() {
   // ③ 得分
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
   ctx.font = '22px sans-serif';
-  const scoreY = p.score === 50 ? H * 0.65 : H * 0.51;
+  const scoreY = p.score === 30 ? H * 0.65 : H * 0.51;
   ctx.fillText(`最终得分：${S.score} 分`, W / 2, scoreY);
 
   // ④ 黄色领取指引框
-  const gx = W * 0.08, gw = W * 0.84, gy = p.score === 50 ? H * 0.73 : H * 0.63;
+  const gx = W * 0.08, gw = W * 0.84, gy = p.score === 30 ? H * 0.73 : H * 0.63;
   ctx.fillStyle = 'rgba(255,200,60,0.95)';
   roundRect(gx, gy, gw, 60, 14); ctx.fill();
   ctx.fillStyle = '#3D1500';
