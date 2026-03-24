@@ -828,12 +828,8 @@ function clampBowl(x) {
 function onDown(x, y) {
   dragging = true;
   if (S.mode === 'start') {
-    // 只响应按钮区域点击（与 drawStart 保持一致，cy = H*0.80）
-    const W = GW, H = GH;
-    const btnW = W * 0.75, btnH = H * 0.12;  // 与绘制尺寸对齐，高度更宽容
-    const btnX = (W - btnW) / 2;
-    const btnY = H * 0.80;                   // 与 drawStart 的 cy 一致
-    if (x >= btnX && x <= btnX + btnW && y >= btnY - btnH / 2 && y <= btnY + btnH / 2) {
+    // 开始页无其他交互元素，下半屏任意位置点击均触发
+    if (y > GH * 0.55) {
       S.mode = 'rules';
       bgmPlay(); // 首次用户交互后启动背景音乐
     }
