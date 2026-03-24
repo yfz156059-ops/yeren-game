@@ -235,8 +235,8 @@ function update(dt) {
     // 高价值食物（吊龙/肥牛）55%概率在同位置延迟生成跟随炸弹，制造二选一局面
     if (f.t === 'food' && (f.img === 'diaolong' || f.img === 'feiniu') && Math.random() < 0.55) {
       S.pendingBombs.push({
-        x: Math.max(23, Math.min(GW - 23, itemX + (Math.random() - 0.5) * 24)),
-        delay: 350 + Math.random() * 150, // 350-500ms 后生成
+        x: Math.max(23, Math.min(GW - 23, itemX + (Math.random() - 0.5) * 10)),
+        delay: 180 + Math.random() * 80, // 180-260ms 后生成，几乎贴着
       });
     }
   }
