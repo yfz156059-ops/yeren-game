@@ -131,7 +131,7 @@ const CFG = {
     { img:'diaolong', label:'吊龙丼饭', v: 20, t:'food', w:30 },
     { img:'feiniu',   label:'肥牛丼饭', v: 15, t:'food', w:40 },
     { img:'jirou',    label:'鸡腿丼饭', v:  8, t:'food', w:30 },
-    { e:'💣', v:-50, t:'bomb', w:30 },
+    { e:'💣', v:-60, t:'bomb', w:50 },
   ],
 };
 
@@ -531,6 +531,14 @@ function drawStart(showBtn = true) {
   grad.addColorStop(1, 'rgba(0,0,0,0.55)');
   ctx.fillStyle = grad;
   ctx.fillRect(0, H * 0.72, W, H * 0.28);
+
+  // ③.5 版本号（右上角，用于验证缓存是否更新）
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('v1.4', W - 10, 20);
+  ctx.restore();
 
   // ④ 开始按钮（跳动+缩放脉冲动画，showBtn=false时跳过）
   if (showBtn !== false) {
