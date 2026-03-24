@@ -556,17 +556,8 @@ function drawStart(showBtn = true) {
       ctx.globalAlpha = 0.82;
       ctx.drawImage(btn, 29, 482, 712, 398, -bw / 2, -bh / 2, bw, bh);
       ctx.globalAlpha = 1;
-    } else {
-      roundRect(-bw / 2, -bh / 2, bw, bh, 26);
-      ctx.fillStyle = '#FF6600'; ctx.fill();
-      ctx.fillStyle = '#FFF';
-      ctx.font = 'bold 20px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('🔥 立即开吃 赢取奖品', 0, 0);
-      ctx.textBaseline = 'alphabetic';
-      ctx.textAlign = 'left';
     }
+    // 图片未加载完时不显示按钮，避免闪烁临时样式
     ctx.restore();
   }
 }
