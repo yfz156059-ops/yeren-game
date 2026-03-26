@@ -120,18 +120,18 @@ if (window.visualViewport) {
 const CFG = {
   duration: 30,      // 游戏时长（秒）
   prizes: [
-    { score: 250, emoji: '🥩', name: '免费肥牛丼饭一份',        color: '#FF4444' },
-    { score: 150, emoji: '💰', name: '立减3元券',               color: '#FF8800' },
-    { score:  80, emoji: '💰', name: '立减2元券',               color: '#FFBB00' },
-    { score:  30, emoji: '🥚🧃', name: '可生食鸡蛋或娃哈哈AD钙奶', color: '#FFD700' },
-    { score:   0, emoji: '🍍', name: '爆汁凤梨',                color: '#44CC44' },
+    { score: 320, emoji: '🥩', name: '免费肥牛丼饭一份',        color: '#FF4444' },
+    { score: 220, emoji: '💰', name: '立减3元券',               color: '#FF8800' },
+    { score: 130, emoji: '💰', name: '立减2元券',               color: '#FFBB00' },
+    { score:  30, emoji: '🥚', name: '可生食鸡蛋',              color: '#FFD700' },
+    { score:   0, emoji: '🧃', name: '娃哈哈AD钙奶',            color: '#44CC44' },
   ],
   // 掉落食材定义：img=图片key / e=emoji / 分值 / 类型 / 权重
   foods: [
     { img:'diaolong', label:'吊龙丼饭', v: 20, t:'food', w:30 },
     { img:'feiniu',   label:'肥牛丼饭', v: 15, t:'food', w:40 },
     { img:'jirou',    label:'鸡腿丼饭', v:  8, t:'food', w:30 },
-    { e:'💣', v:-60, t:'bomb', w:50 },
+    { e:'💣', v:-20, t:'bomb', w:50 },
   ],
 };
 
@@ -768,32 +768,16 @@ function drawEnd() {
 
   ctx.fillStyle = p.color;
   ctx.font = 'bold 36px sans-serif';
-  if (p.score === 30) {
-    // 二选一奖品：分三行显示
-    ctx.fillText('🥚 可生食鸡蛋', W / 2, H * 0.38);
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(255,255,255,0.60)';
-    ctx.font = '22px sans-serif';
-    ctx.fillText('或', W / 2, H * 0.45);
-    ctx.fillStyle = p.color;
-    ctx.font = 'bold 36px sans-serif';
-    ctx.fillText('🧃 娃哈哈AD钙奶', W / 2, H * 0.52);
-    ctx.fillStyle = 'rgba(255,255,255,0.90)';
-    ctx.font = 'bold 22px sans-serif';
-    ctx.fillText('（奖品二选一）', W / 2, H * 0.59);
-  } else {
-    ctx.fillText(p.name, W / 2, H * 0.42);
-    ctx.shadowBlur = 0;
-  }
+  ctx.fillText(p.name, W / 2, H * 0.42);
+  ctx.shadowBlur = 0;
 
   // ③ 得分
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
   ctx.font = '22px sans-serif';
-  const scoreY = p.score === 30 ? H * 0.65 : H * 0.51;
-  ctx.fillText(`最终得分：${S.score} 分`, W / 2, scoreY);
+  ctx.fillText(`最终得分：${S.score} 分`, W / 2, H * 0.51);
 
   // ④ 黄色领取指引框
-  const gx = W * 0.08, gw = W * 0.84, gy = p.score === 30 ? H * 0.73 : H * 0.63;
+  const gx = W * 0.08, gw = W * 0.84, gy = H * 0.63;
   ctx.fillStyle = 'rgba(255,200,60,0.95)';
   roundRect(gx, gy, gw, 60, 14); ctx.fill();
   ctx.fillStyle = '#3D1500';
