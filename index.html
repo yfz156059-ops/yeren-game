@@ -131,7 +131,7 @@ const CFG = {
     { img:'diaolong', label:'吊龙丼饭', v: 20, t:'food', w:30 },
     { img:'feiniu',   label:'肥牛丼饭', v: 15, t:'food', w:40 },
     { img:'jirou',    label:'鸡腿丼饭', v:  8, t:'food', w:30 },
-    { e:'💣', v:-45, t:'bomb', w:65 },
+    { e:'💣', v:-45, t:'bomb', w:80 },
   ],
 };
 
@@ -213,17 +213,17 @@ function update(dt) {
   S.elapsed += dt;
   const sec = S.elapsed / 1000;
 
-  // 阶段划分（30秒游戏：0-10s热身 / 10-20s加速 / 20-30s冲刺）
+  // 阶段划分（30秒游戏：全程高压，后期更疯狂）
   S.phase = sec < 10 ? 1 : sec < 20 ? 2 : 3;
 
-  // 生成间隔：热身1.0s / 加速0.8s / 冲刺0.6s
-  const interval = [1000, 800, 600][S.phase - 1];
+  // 生成间隔：一开始就快 / 中期更快 / 冲刺极速
+  const interval = [600, 500, 400][S.phase - 1];
   S.spawnTimer += dt;
   if (S.spawnTimer >= interval) {
     S.spawnTimer = 0;
     const f = weightedPick();
     const size = f.t === 'bomb' ? 46 : 68;
-    const speed = (3.5 + Math.random() * 1.0) * [1.1, 1.5, 2.0][S.phase - 1];
+    const speed = (3.5 + Math.random() * 1.0) * [1.8, 2.2, 2.8][S.phase - 1];
     const itemX = size / 2 + Math.random() * (GW - size);
     S.items.push({
       img: f.img, e: f.e, label: f.label, v: f.v, t: f.t, w: f.w,
@@ -250,7 +250,7 @@ function update(dt) {
         img: undefined, e: bombCfg.e, label: undefined,
         v: bombCfg.v, t: 'bomb', w: bombCfg.w,
         size: 46,
-        speed: (3.5 + Math.random() * 1.0) * [1.1, 1.5, 2.0][S.phase - 1],
+        speed: (3.5 + Math.random() * 1.0) * [1.8, 2.2, 2.8][S.phase - 1],
         x: p.x, y: -46,
         sway: Math.random() * Math.PI * 2,
       });
